@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	httpPort = "localhost:3000"
+	httpPort = ":3000"
 	city     = "moscow"
 )
 
@@ -34,7 +34,7 @@ func main() {
 	r.Use(middleware.Logger)
 	ctx := context.Background()
 
-	conn, err := pgx.Connect(ctx, "postgresql://privatlive:parol@localhost:54321/weather")
+	conn, err := pgx.Connect(ctx, "postgresql://privatlive:parol@localhost:54321weather")
 	if err != nil {
 		panic(err)
 	}
@@ -46,22 +46,24 @@ func main() {
 		fmt.Printf("Requested city: %s\n", cityName)
 
 		var reading Reading
-		conn.QueryRow(ctx,
-			"select name, temperature, timestamp from reading where name = $1 order by timestamp desc limit 1", city,
+		err = conn.QueryRow(
+			ctx,
+			"select name, timestamp,temperature from reading where name = $1 order by timestamp desc limit 1", city,
 		).Scan(&reading.Name, &reading.Timestamp, &reading.Temperature)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				w.WriteHeader(http.StatusInternalServerError)
+				w.WriteHeader(http.StatusNotFound)
 				w.Write([]byte("not found"))
 				return
 			}
+
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("internal error"))
 			return
 		}
 
 		var raw []byte
-		raw, err := json.Marshal(reading)
+		raw, err = json.Marshal(reading)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -69,7 +71,7 @@ func main() {
 			return
 		}
 
-		_, err = w.Write([]byte(raw))
+		_, err = w.Write(raw)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -87,13 +89,15 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		fmt.Println("starting server on port" + httpPort)
-		err := http.ListenAndServe(httpPort, r)
+
+		fmt.Println("starting server on port " + httpPort)
+		err = http.ListenAndServe(httpPort, r)
 		if err != nil {
 			panic(err)
 		}
@@ -101,11 +105,12 @@ func main() {
 
 	go func() {
 		defer wg.Done()
+
 		fmt.Printf("starting job: %v\n", jobs[0].ID())
 		s.Start()
 	}()
-	wg.Wait()
 
+	wg.Wait()
 }
 
 func initJobs(ctx context.Context, scheduler gocron.Scheduler, conn *pgx.Conn) ([]gocron.Job, error) {
@@ -113,7 +118,6 @@ func initJobs(ctx context.Context, scheduler gocron.Scheduler, conn *pgx.Conn) (
 		Timeout: time.Second * 10,
 	}
 	geocodingClient := geocoding.NewClient(httpClient)
-
 	openMeteoClient := open_meteo.NewClient(httpClient)
 
 	j, err := scheduler.NewJob(
@@ -151,7 +155,6 @@ func initJobs(ctx context.Context, scheduler gocron.Scheduler, conn *pgx.Conn) (
 				}
 
 				fmt.Printf("%v updated data for city: %s\n", time.Now(), city)
-
 			},
 		),
 	)
