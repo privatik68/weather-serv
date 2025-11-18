@@ -34,6 +34,8 @@ func main() {
 	r.Use(middleware.Logger)
 	ctx := context.Background()
 
+	fix/tork
+
 	conn, err := pgx.Connect(ctx, "postgresql://privatlive:parol@localhost:54321weather")
 	if err != nil {
 		panic(err)
